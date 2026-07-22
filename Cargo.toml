@@ -1,0 +1,7 @@
+[package]
+name = "cses_problems"
+version = "0.1.0"
+edition = "2024"
+default-run = "cses_problems"
+
+[dependencies]
