@@ -116,10 +116,10 @@ fn main() {
             let dir = parent_dir[curr_row][curr_col];
             path.push(dir);
             match dir {
-                'U' => curr_row += 1, // opposite of Up is Down
-                'D' => curr_row -= 1, // opposite of Down is Up
-                'R' => curr_col -= 1, // opposite of Right is Left
-                'L' => curr_col += 1, // opposite of Left is Right
+                'U' => curr_row += 1,
+                'D' => curr_row -= 1,
+                'R' => curr_col -= 1,
+                'L' => curr_col += 1,
                 _ => {}
             }
         }
