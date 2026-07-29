@@ -54,27 +54,38 @@ fn main() {
         let edge : Vec<i64> = read_vector();
         edges.push(Edge { source: edge[0] as usize, dest: edge[1] as usize, weight: edge[2] });
     }
-    let mut distances : Vec<i64> = vec![i64::MAX; n_m[0]+1];
+    let mut distances : Vec<i64> = vec![0; n_m[0]+1];
     distances[1] = 0;
     let mut parent : Vec<usize> = vec![0; n_m[0]+1];
+    for i in 1..=n_m[0]{
+        parent[i] = i;
+    }
     for i in 1..n_m[0]{
         for edge in &edges{
-            if distances[edge.source]!= i64::MAX && distances[edge.dest] > distances[edge.source]+ edge.weight{
+            if distances[edge.dest] > distances[edge.source]+ edge.weight{
                 distances[edge.dest] = distances[edge.source]+ edge.weight;
                 parent[edge.dest] = edge.source;
             }
         }
     }
     for edge in &edges{
-        if distances[edge.source]!= i64::MAX && distances[edge.dest] > distances[edge.source]+ edge.weight{
+        if distances[edge.dest] > distances[edge.source]+ edge.weight{
             println!("YES");
-            print!("{}", edge.source);
-            let mut curr = parent[edge.source];
-            while curr != edge.source{
-                print!(" {curr}");
+            let mut node = edge.dest;
+            for _ in 0..n_m[0]{
+                node = parent[node];
+            }
+            let cycle_node = node;
+            let mut path : Vec<usize> = vec![cycle_node];
+            let mut curr = parent[cycle_node];
+            while curr != cycle_node{
+                path.push(curr);
                 curr = parent[curr];
             }
-            println!(" {curr}");
+            path.push(cycle_node);
+            path.reverse();
+            let result : Vec<String> = path.iter().map(|x| x.to_string()).collect();
+            println!("{}", result.join(" "));
             return;
         }
     }

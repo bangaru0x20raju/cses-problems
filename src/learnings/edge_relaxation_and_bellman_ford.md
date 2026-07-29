@@ -226,6 +226,116 @@ fn bellman_ford(n: usize, edges: &Vec<(usize, usize, i64)>, source: usize) -> (V
 
     (dist, has_negative_cycle)
 }
+---
+
+## Finding Negative Cycles in Disconnected Graphs (Virtual Source Trick)
+
+### The Problem: `dist[source] = 0`, rest = `i64::MAX`
+
+If the graph has disconnected components, nodes unreachable from your source stay at `i64::MAX`. You'll miss negative cycles in other components.
+
+```
+Component 1:  1 → 2 → 3        (reachable from node 1 ✅)
+Component 2:  4 → 5 → 6 → 4    (negative cycle, but unreachable from 1 ❌)
+
+dist = [_, 0, 5, 8,  MAX, MAX, MAX]
+                      ^^^  ^^^  ^^^  ← never relaxed, cycle missed!
+```
+
+### Why `i64::MAX` is Dangerous (Even Without the Guard)
+
+If you remove the `dist[u] != i64::MAX` guard to allow relaxation from unreachable nodes, you get **overflow**:
+
+```
+// Positive weight edge from unreachable node:
+i64::MAX + 5 = 💥 OVERFLOW!
+  → Debug mode:   PANIC (crash)
+  → Release mode:  Wraps to huge NEGATIVE number → false relaxation!
+
+// Negative weight edge from unreachable node:
+i64::MAX + (-5) = 9223372036854775802  (valid but meaningless)
+9223372036854775802 < i64::MAX?  → YES → false relaxation with garbage!
+```
+
+Either way, garbage values propagate through the graph.
+
+### The Fix: Initialize ALL Distances to 0
+
+```rust
+let mut dist = vec![0_i64; n + 1];  // ALL zeros, no i64::MAX anywhere
+```
+
+This is mathematically equivalent to adding a **virtual source node** with free edges (cost 0) to every real node:
+
+```
+                    ┌──(0)──→ 1
+                    ├──(0)──→ 2
+Virtual Source ─────├──(0)──→ 3
+                    ├──(0)──→ 4
+                    ├──(0)──→ 5
+                    └──(0)──→ 6
+```
+
+Now every node is "reachable" with initial cost 0:
+- No overflow (all computations start from 0)
+- No missed components (every node participates in relaxation)
+- Negative cycles are detected correctly (only genuinely negative paths cause distances to drop below 0)
+
+**Note:** This trick is only for **negative cycle detection**. If you need actual shortest distances from a specific source, use the standard `dist[source] = 0, rest = i64::MAX` approach with the guard.
+
+---
+
+## Correctly Tracing a Negative Cycle
+
+When Round N detects a relaxation, the node involved might not be **on** the cycle — it could be downstream from it (the negative cycle makes distances keep decreasing along all reachable nodes).
+
+### Fix: Walk Back N Times First
+
+From the detected node, follow `parent` pointers N times. This guarantees you land on a node that is **inside** the cycle:
+
+```rust
+// Round N: detect and trace negative cycle
+for &(u, v, w) in &edges {
+    if dist[u] + w < dist[v] {
+        // Walk back N times to land inside the cycle
+        let mut node = v;
+        for _ in 0..n {
+            node = parent[node];
+        }
+
+        // Now trace the cycle from this node
+        let cycle_node = node;
+        let mut path = vec![cycle_node];
+        let mut curr = parent[cycle_node];
+        while curr != cycle_node {
+            path.push(curr);
+            curr = parent[curr];
+        }
+        path.push(cycle_node);  // Close the cycle
+        path.reverse();
+
+        println!("YES");
+        // Print path...
+        return;
+    }
+}
+```
+
+### Why walk back N times?
+
+The parent chain from a downstream node eventually leads into the cycle (since the cycle keeps updating parents). After N steps, you've walked far enough that you **must** be looping inside the cycle.
+
+```
+Negative cycle: 3 → 4 → 5 → 3
+
+Downstream node: 5 → 6 → 7  (distances keep decreasing here too)
+
+Detected at node 7:
+  parent[7] = 6
+  parent[6] = 5
+  parent[5] = 3    ← now inside the cycle!
+  parent[3] = 5
+  parent[5] = 3    ← looping inside cycle forever
 ```
 
 ---
@@ -236,4 +346,7 @@ fn bellman_ford(n: usize, edges: &Vec<(usize, usize, i64)>, source: usize) -> (V
 - **Bellman-Ford** = Relax all edges, repeat N-1 times.
 - **N-1 rounds** because the longest shortest path has at most N-1 edges.
 - **Round N** detects negative cycles (if any edge still relaxes, there's a negative cycle).
+- **Virtual source trick**: Initialize all distances to 0 to detect negative cycles in disconnected graphs.
+- **Tracing a cycle**: Walk back N times from the detected node to land inside the cycle, then trace it.
 - Use **Bellman-Ford** when edges can be negative. Use **Dijkstra** when all edges are non-negative (it's faster).
+
